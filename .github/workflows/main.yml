@@ -8,10 +8,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: ./  # change this to your mod folder if not root
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -24,7 +20,7 @@ jobs:
 
     - name: Build mod
       run: |
-        # Check if gradlew exists
+        # Use Gradle wrapper if it exists
         if [ -f ./gradlew ]; then
           echo "Using Gradle wrapper"
           chmod +x ./gradlew
