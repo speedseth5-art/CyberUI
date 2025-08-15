@@ -17,11 +17,18 @@ jobs:
         distribution: temurin
         java-version: '17'
 
-    - name: Grant Gradle permission
-      run: chmod +x ./gradlew
-
     - name: Build mod
-      run: ./gradlew build
+      run: |
+        if [ -f ./gradlew ]; then
+          echo "Using Gradle wrapper"
+          chmod +x ./gradlew
+          ./gradlew build
+        else
+          echo "Gradle wrapper not found, installing Gradle"
+          sudo apt-get update
+          sudo apt-get install -y gradle
+          gradle build
+        fi
 
     - name: Upload compiled jar
       uses: actions/upload-artifact@v4
