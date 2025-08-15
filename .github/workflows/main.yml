@@ -1,4 +1,4 @@
-name: Build CyberUI
+name: Build and Release CyberUI
 
 on:
   push:
@@ -18,22 +18,66 @@ jobs:
         distribution: temurin
         java-version: '17'
 
-    - name: Build mod
+    - name: Locate Gradle wrapper and build
       run: |
-        # Use Gradle wrapper if it exists
-        if [ -f ./gradlew ]; then
-          echo "Using Gradle wrapper"
-          chmod +x ./gradlew
-          ./gradlew build
-        else
-          echo "Gradle wrapper not found, installing Gradle"
+        WRAPPER_DIR=$(find . -name gradlew -exec dirname {} \;)
+        if [ -z "$WRAPPER_DIR" ]; then
+          echo "No gradlew found, using system Gradle"
           sudo apt-get update
           sudo apt-get install -y gradle
           gradle build
+        else
+          echo "Using Gradle wrapper in $WRAPPER_DIR"
+          chmod +x "$WRAPPER_DIR/gradlew"
+          "$WRAPPER_DIR/gradlew" build
         fi
 
-    - name: Upload compiled jar
+    - name: Extract mod version from build.gradle
+      id: extract_version
+      run: |
+        VERSION=$(grep -oP 'version\s*=\s*["'\'']\K[^"'\'' ]+' build.gradle)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Rename jar for Modrinth
+      run: |
+        JAR_PATH=$(find . -type f -path "**/build/libs/*.jar" | head -n 1)
+        echo "Found jar: $JAR_PATH"
+        VERSION=${{ steps.extract_version.outputs.version }}
+        NEW_NAME="CyberUI-1.18.2-$VERSION.jar"
+        echo "Renaming jar to $NEW_NAME"
+        mv "$JAR_PATH" "$NEW_NAME"
+
+    - name: Upload compiled jar as artifact
       uses: actions/upload-artifact@v4
       with:
         name: CyberUI-jar
-        path: build/libs/*.jar
+        path: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.jar
+
+    - name: Create Git tag
+      run: |
+        VERSION=${{ steps.extract_version.outputs.version }}
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git tag -a "v$VERSION" -m "Release v$VERSION"
+        git push origin "v$VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.extract_version.outputs.version }}
+        name: CyberUI v${{ steps.extract_version.outputs.version }}
+        body: "Automated build release for Forge 1.18.2"
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload jar to GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
