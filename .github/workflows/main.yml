@@ -22,26 +22,22 @@ jobs:
         distribution: temurin
         java-version: '17'
 
-    - name: List repo files for debug
-      run: ls -R
-
     - name: Locate gradlew and build.gradle
       id: locate_files
       run: |
         GRADLEW_PATH=$(find . -name gradlew | head -n 1)
         BUILD_GRADLE_PATH=$(find . -name build.gradle | head -n 1)
         if [ -z "$GRADLEW_PATH" ]; then
-          echo "ERROR: gradlew not found!"
+          echo "ERROR: gradlew not found! Please commit gradlew and gradle/wrapper/"
           exit 1
         fi
         if [ -z "$BUILD_GRADLE_PATH" ]; then
-          echo "ERROR: build.gradle not found!"
+          echo "ERROR: build.gradle not found! Make sure it’s in the repository"
           exit 1
         fi
-        echo "Found gradlew at $GRADLEW_PATH"
-        echo "Found build.gradle at $BUILD_GRADLE_PATH"
         echo "gradlew_path=$GRADLEW_PATH" >> $GITHUB_OUTPUT
         echo "build_gradle_path=$BUILD_GRADLE_PATH" >> $GITHUB_OUTPUT
+        echo "Found gradlew and build.gradle."
 
     - name: Make gradlew executable
       run: chmod +x ${{ steps.locate_files.outputs.gradlew_path }}
@@ -75,11 +71,18 @@ jobs:
         mv "$JAR_PATH" "$NEW_NAME"
         echo "Jar renamed to $NEW_NAME"
 
+    - name: Package jar into zip
+      run: |
+        VERSION=${{ steps.extract_version.outputs.version }}
+        ZIP_NAME="CyberUI-1.18.2-$VERSION.zip"
+        zip -r "$ZIP_NAME" "CyberUI-1.18.2-$VERSION.jar"
+        echo "Packaged ZIP: $ZIP_NAME"
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: CyberUI-jar
-        path: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.jar
+        name: CyberUI-zip
+        path: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.zip
 
     - name: Create Git tag
       run: |
@@ -103,9 +106,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload jar to GitHub Release
+    - name: Upload zip to GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.jar
+        files: CyberUI-1.18.2-${{ steps.extract_version.outputs.version }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
