@@ -11,6 +11,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: ./CyberUI  # Set to your mod folder
 
     steps:
     - name: Checkout repository
@@ -22,27 +23,23 @@ jobs:
         distribution: temurin
         java-version: '17'
 
-    - name: List repo files for debug
-      run: ls -R
-
     - name: Verify required files
       run: |
-        if ! find . -name gradlew | grep -q .; then
-          echo "ERROR: gradlew not found in the repository!"
+        if [ ! -f gradlew ]; then
+          echo "ERROR: gradlew not found in CyberUI folder!"
           exit 1
         fi
-        if ! find . -name build.gradle | grep -q .; then
-          echo "ERROR: build.gradle not found in the repository!"
+        if [ ! -f build.gradle ]; then
+          echo "ERROR: build.gradle not found in CyberUI folder!"
           exit 1
         fi
         echo "gradlew and build.gradle found, proceeding..."
 
-    - name: Locate Gradle wrapper and build
+    - name: Make gradlew executable
+      run: chmod +x gradlew
+
+    - name: Build mod
       run: |
-        WRAPPER_DIR=$(find . -name gradlew -exec dirname {} \; | head -n 1)
-        echo "Using Gradle wrapper in $WRAPPER_DIR"
-        chmod +x "$WRAPPER_DIR/gradlew"
-        cd "$WRAPPER_DIR"
         ./gradlew build --stacktrace || { echo "Gradle build failed!"; exit 1; }
 
     - name: Extract mod version from build.gradle
@@ -59,12 +56,11 @@ jobs:
     - name: Rename jar for Modrinth
       run: |
         VERSION=${{ steps.extract_version.outputs.version }}
-        JAR_PATH=$(find . -type f -path "**/build/libs/*.jar" | head -n 1)
+        JAR_PATH=$(find build/libs -type f -name "*.jar" | head -n 1)
         if [ -z "$JAR_PATH" ]; then
           echo "ERROR: No jar found in build/libs!"
           exit 1
         fi
-        echo "Found jar: $JAR_PATH"
         NEW_NAME="CyberUI-1.18.2-$VERSION.jar"
         mv "$JAR_PATH" "$NEW_NAME"
         echo "Jar renamed to $NEW_NAME"
