@@ -8,6 +8,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -18,18 +22,23 @@ jobs:
         distribution: temurin
         java-version: '17'
 
+    - name: List repo files for debug
+      run: ls -R
+
     - name: Locate Gradle wrapper and build
       run: |
-        WRAPPER_DIR=$(find . -name gradlew -exec dirname {} \;)
-        if [ -z "$WRAPPER_DIR" ]; then
-          echo "No gradlew found, using system Gradle"
+        # Locate gradlew
+        WRAPPER_DIR=$(find . -name gradlew -exec dirname {} \; | head -n 1)
+        if [ -n "$WRAPPER_DIR" ]; then
+          echo "Found gradlew in $WRAPPER_DIR"
+          chmod +x "$WRAPPER_DIR/gradlew"
+          cd "$WRAPPER_DIR"
+          ./gradlew build --stacktrace
+        else
+          echo "No gradlew found, installing Gradle"
           sudo apt-get update
           sudo apt-get install -y gradle
-          gradle build
-        else
-          echo "Using Gradle wrapper in $WRAPPER_DIR"
-          chmod +x "$WRAPPER_DIR/gradlew"
-          "$WRAPPER_DIR/gradlew" build
+          gradle build --stacktrace
         fi
 
     - name: Extract mod version from build.gradle
@@ -37,17 +46,18 @@ jobs:
       run: |
         VERSION=$(grep -oP 'version\s*=\s*["'\'']\K[^"'\'' ]+' build.gradle)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Detected mod version: $VERSION"
 
     - name: Rename jar for Modrinth
       run: |
+        VERSION=${{ steps.extract_version.outputs.version }}
         JAR_PATH=$(find . -type f -path "**/build/libs/*.jar" | head -n 1)
         echo "Found jar: $JAR_PATH"
-        VERSION=${{ steps.extract_version.outputs.version }}
         NEW_NAME="CyberUI-1.18.2-$VERSION.jar"
-        echo "Renaming jar to $NEW_NAME"
         mv "$JAR_PATH" "$NEW_NAME"
+        echo "Jar renamed to $NEW_NAME"
 
-    - name: Upload compiled jar as artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: CyberUI-jar
