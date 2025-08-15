@@ -25,26 +25,34 @@ jobs:
     - name: List repo files for debug
       run: ls -R
 
+    - name: Verify required files
+      run: |
+        if ! find . -name gradlew | grep -q .; then
+          echo "ERROR: gradlew not found in the repository!"
+          exit 1
+        fi
+        if ! find . -name build.gradle | grep -q .; then
+          echo "ERROR: build.gradle not found in the repository!"
+          exit 1
+        fi
+        echo "gradlew and build.gradle found, proceeding..."
+
     - name: Locate Gradle wrapper and build
       run: |
-        # Locate gradlew
         WRAPPER_DIR=$(find . -name gradlew -exec dirname {} \; | head -n 1)
-        if [ -n "$WRAPPER_DIR" ]; then
-          echo "Found gradlew in $WRAPPER_DIR"
-          chmod +x "$WRAPPER_DIR/gradlew"
-          cd "$WRAPPER_DIR"
-          ./gradlew build --stacktrace
-        else
-          echo "No gradlew found, installing Gradle"
-          sudo apt-get update
-          sudo apt-get install -y gradle
-          gradle build --stacktrace
-        fi
+        echo "Using Gradle wrapper in $WRAPPER_DIR"
+        chmod +x "$WRAPPER_DIR/gradlew"
+        cd "$WRAPPER_DIR"
+        ./gradlew build --stacktrace || { echo "Gradle build failed!"; exit 1; }
 
     - name: Extract mod version from build.gradle
       id: extract_version
       run: |
         VERSION=$(grep -oP 'version\s*=\s*["'\'']\K[^"'\'' ]+' build.gradle)
+        if [ -z "$VERSION" ]; then
+          echo "ERROR: Could not extract mod version from build.gradle"
+          exit 1
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Detected mod version: $VERSION"
 
@@ -52,6 +60,10 @@ jobs:
       run: |
         VERSION=${{ steps.extract_version.outputs.version }}
         JAR_PATH=$(find . -type f -path "**/build/libs/*.jar" | head -n 1)
+        if [ -z "$JAR_PATH" ]; then
+          echo "ERROR: No jar found in build/libs!"
+          exit 1
+        fi
         echo "Found jar: $JAR_PATH"
         NEW_NAME="CyberUI-1.18.2-$VERSION.jar"
         mv "$JAR_PATH" "$NEW_NAME"
