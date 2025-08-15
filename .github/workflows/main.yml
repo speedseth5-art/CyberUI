@@ -11,7 +11,6 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./CyberUI  # Set to your mod folder
 
     steps:
     - name: Checkout repository
@@ -23,29 +22,40 @@ jobs:
         distribution: temurin
         java-version: '17'
 
-    - name: Verify required files
+    - name: List repo files for debug
+      run: ls -R
+
+    - name: Locate gradlew and build.gradle
+      id: locate_files
       run: |
-        if [ ! -f gradlew ]; then
-          echo "ERROR: gradlew not found in CyberUI folder!"
+        GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+        BUILD_GRADLE_PATH=$(find . -name build.gradle | head -n 1)
+        if [ -z "$GRADLEW_PATH" ]; then
+          echo "ERROR: gradlew not found!"
           exit 1
         fi
-        if [ ! -f build.gradle ]; then
-          echo "ERROR: build.gradle not found in CyberUI folder!"
+        if [ -z "$BUILD_GRADLE_PATH" ]; then
+          echo "ERROR: build.gradle not found!"
           exit 1
         fi
-        echo "gradlew and build.gradle found, proceeding..."
+        echo "Found gradlew at $GRADLEW_PATH"
+        echo "Found build.gradle at $BUILD_GRADLE_PATH"
+        echo "gradlew_path=$GRADLEW_PATH" >> $GITHUB_OUTPUT
+        echo "build_gradle_path=$BUILD_GRADLE_PATH" >> $GITHUB_OUTPUT
 
     - name: Make gradlew executable
-      run: chmod +x gradlew
+      run: chmod +x ${{ steps.locate_files.outputs.gradlew_path }}
 
     - name: Build mod
       run: |
+        WRAPPER_DIR=$(dirname "${{ steps.locate_files.outputs.gradlew_path }}")
+        cd "$WRAPPER_DIR"
         ./gradlew build --stacktrace || { echo "Gradle build failed!"; exit 1; }
 
-    - name: Extract mod version from build.gradle
+    - name: Extract mod version
       id: extract_version
       run: |
-        VERSION=$(grep -oP 'version\s*=\s*["'\'']\K[^"'\'' ]+' build.gradle)
+        VERSION=$(grep -oP 'version\s*=\s*["'\'']\K[^"'\'' ]+' "${{ steps.locate_files.outputs.build_gradle_path }}")
         if [ -z "$VERSION" ]; then
           echo "ERROR: Could not extract mod version from build.gradle"
           exit 1
@@ -55,12 +65,12 @@ jobs:
 
     - name: Rename jar for Modrinth
       run: |
-        VERSION=${{ steps.extract_version.outputs.version }}
-        JAR_PATH=$(find build/libs -type f -name "*.jar" | head -n 1)
+        JAR_PATH=$(find . -type f -path "**/build/libs/*.jar" | head -n 1)
         if [ -z "$JAR_PATH" ]; then
           echo "ERROR: No jar found in build/libs!"
           exit 1
         fi
+        VERSION=${{ steps.extract_version.outputs.version }}
         NEW_NAME="CyberUI-1.18.2-$VERSION.jar"
         mv "$JAR_PATH" "$NEW_NAME"
         echo "Jar renamed to $NEW_NAME"
